@@ -45,6 +45,11 @@ jupyter lab
    - 可复用函数 (scripts/)
    - 测试用例 (tests/)
 
+## 🧭 研究与工程 Idea Bank
+
+- [Research & Patent Idea Bank](docs/research-and-patent-idea-bank.md) — 跨金融、经济、数学、统计、计算机的专利筛选与可开发技术想法库。
+- 仓库为公开仓库：尚未申请的专利候选只记录非使能级概要，完整技术方案在申请前不公开。
+
 ## 🔧 环境信息
 
 - **设备**: MacBook Air M1 (16GB+1TB)
