@@ -45,10 +45,13 @@ jupyter lab
    - 可复用函数 (scripts/)
    - 测试用例 (tests/)
 
-## 🧭 研究与工程 Idea Bank
+## 🧭 研究、论文与工程 Idea Bank
 
 - [Research & Patent Idea Bank](docs/research-and-patent-idea-bank.md) — 跨金融、经济、数学、统计、计算机的专利筛选与可开发技术想法库。
 - [Patent screening log — 2026-09-04](docs/patent-screening-log-2026-09-04.md) — 本轮跨学科现有技术攻击、候选降级记录与下一步检索队列。
+- [Paper research program — 2026-09-09](docs/paper-research-program-2026-09-09.md) — 推免论文路线、P1–P5 排序、淘汰方向和第一轮 novelty verdict。
+- [P1 protocol — sampling resolution & event-study inference stability](docs/p1-temporal-aggregation-event-study-protocol.md) — 当前主论文的研究问题、负对照、指标、采样网格、统计设计和 kill gates。
+- [Engineering spin-outs from paper screening — 2026-09-09](docs/engineering-spinouts-from-paper-screen-2026-09-09.md) — 论文不采用但仍值得开发的事件回放、数据语义、规则雷达、PIT、复现性等工程方向。
 - 仓库为公开仓库：尚未申请的专利候选只记录非使能级概要，完整技术方案在申请前不公开。
 
 ## 🔧 环境信息
