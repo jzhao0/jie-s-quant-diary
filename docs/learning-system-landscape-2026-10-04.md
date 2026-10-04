@@ -2483,3 +2483,196 @@ score = 100 / 100
 下一步继续跑：
 
 > **同样六份原始文件 → 自动 Lesson Processor → benchmark + raw-source factuality audit。**
+
+
+---
+
+# Round 8 — Prompt provenance correction + ingestion watcher prototype（2026-10-04）
+
+## 51. 关于“原始期货市场 Prompt”的严格状态
+
+已再次搜索：
+- 个人历史上下文；
+- 当前会话文件；
+- Library。
+
+可以确认历史记录里**确实存在**一份以：
+
+```text
+你现在是我的“期货市场”课程专项 AI。
+```
+
+开头的原始 prompt，而且历史索引确认它包含：
+- 四类课堂文件；
+- 资料证据优先级；
+- [A]/[B]/[C]/[D]；
+- 12部分输出结构；
+- 主动检验；
+- 课程债务；
+- OBS 摘要；
+- 长期知识树；
+- 后续上传材料处理规则。
+
+但是当前可用检索结果只返回了**索引级摘要**，没有返回该 prompt 的完整逐字正文。
+
+因此，上一轮“已经找到原始完整 Prompt”的表述需要严格修正为：
+
+> 已确认原 Prompt 的存在、开头和结构，但目前没有取得完整逐字正文。
+
+当前 `Prompt Contract v1` 继续作为**可执行规范合同**使用，但不得标注为 verbatim original。
+
+如果以后历史聊天或文件检索返回原文全文，应：
+1. 原文全文保存为 immutable reference；
+2. Prompt Contract 改成派生规范；
+3. benchmark 记录二者 SHA-256 与版本关系。
+
+---
+
+## 52. 六份真实课程源文件已做 deterministic normalization
+
+隔离输出：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\normalized_sources
+```
+
+包含六份 Markdown normalization 和 `manifest.json`。
+
+每份 source 都记录：
+- 原始 DOCX SHA-256；
+- normalized text SHA-256；
+- chars；
+- lines。
+
+目的：
+- 模型升级后可 replay；
+- Parser 改动后可发现 normalization drift；
+- 不需要每次重新猜“是不是同一份输入”。
+
+---
+
+## 53. 课程目录 watcher prototype：LIVE PASS
+
+新建：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\automation\watch_lesson_bundle.py
+```
+
+当前针对真实：
+
+```text
+D:\文件\学校\大三上\期货市场\第二周第一节
+```
+
+自动检查：
+
+```text
+第一小节
+  转写结果
+  AI纪要
+  笔记
+
+第二小节
+  转写结果
+  AI纪要
+  笔记
+```
+
+六份齐全后生成：
+
+```text
+learning.ingestion-job.v1
+```
+
+真实第一次运行：
+
+```json
+{
+  "status": "PASS",
+  "action": "JOB_CREATED",
+  "lesson_key": "期货市场/第二周第一节",
+  "job_id": "job-edec02749d5be164",
+  "source_count": 6,
+  "next_state": "READY_FOR_AI",
+  "remote_writes": 0
+}
+```
+
+完全相同输入第二次运行：
+
+```json
+{
+  "status": "PASS",
+  "action": "SKIP_UNCHANGED"
+}
+```
+
+因此 watcher 的第一版幂等性成立。
+
+---
+
+## 54. Ingestion Job 已经把“自动转写之后”那个人工断点正式表示出来
+
+当前 job：
+
+```text
+READY_FOR_AI
+```
+
+并显式携带：
+- course / lesson；
+- 六个 source path；
+- 每个 source SHA-256；
+- lesson fingerprint；
+- benchmark path；
+- LessonState schema；
+- reference output；
+- required outputs；
+- next_action = external_web_ai_processor。
+
+也就是说现在已经把原来：
+
+```text
+自动转写
+→ 用户手工上传 GPT
+```
+
+改造成了机器可执行边界：
+
+```text
+自动转写
+→ watcher
+→ ingestion job
+→ external_web_ai_processor
+```
+
+当前没有调用外部 Web AI，也没有远程写入。
+
+---
+
+## 55. 下一步对接点
+
+下一步不再继续扩写 watcher，而是把已有的本地 Web AI / UACP 项目接到：
+
+```text
+learning.ingestion-job.v1
+```
+
+它只需要完成：
+
+```text
+READY_FOR_AI
+→ 上传/发送六份 source
+→ 使用 Course Prompt Contract
+→ 取得 GPT 输出
+→ 保存 lesson_report.md
+→ 生成 lesson_state.json
+→ benchmark
+→ factuality audit
+→ ACCEPT / REPAIR
+```
+
+这样课程自动化项目和 Learning System 不耦合具体浏览器实现。
+
+换 Web GPT / API / 本地模型时，job contract 不变。
