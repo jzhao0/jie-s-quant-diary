@@ -1859,3 +1859,470 @@ DeepTutor 已经覆盖题库执行面。
 6. 最后才是自动 watcher / UACP wiring。
 
 下一道 Gate：**Gold Baseline LessonState fixture + schema**。
+
+
+---
+
+# Round 5 — Gold LessonState Schema + Rich Import Proof（2026-10-04）
+
+## 35. LessonState v0.1 已建立并通过 JSON Schema
+
+在隔离 spike 中建立：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\lesson_state_v0.1.schema.json
+D:\Projects\_spikes\deeptutor-real-course-20261004\futures_w2l1_gold.lesson_state.json
+```
+
+Schema：
+
+```text
+learning.lesson-state.v0.1
+```
+
+当前核心实体：
+
+```text
+Lesson
+Source
+SourceSpan
+EvidenceRef
+KnowledgeUnit
+Question
+FlashcardCandidate
+UnresolvedConflict
+CourseDebt
+```
+
+并正式把两个状态拆开：
+
+```text
+coverage_status:
+  not_taught / introduced / taught / advanced
+
+mastery_status:
+  untested / weak / partial / mastered / decaying
+```
+
+真实期货课 Gold fixture 当前包含：
+
+```text
+sources               6
+evidence              10
+knowledge_units       10
+questions             10
+flashcard_candidates   5
+unresolved_conflicts   1
+course_debts           3
+```
+
+`jsonschema.validate()`：
+
+```text
+PASS
+```
+
+这意味着我们后续不再让 Lesson Processor 输出任意结构的长 JSON，而是有了第一份可回归测试的机器合同。
+
+---
+
+## 36. EvidenceRef 已经能表达真实课堂需要
+
+当前 v0.1 可以表示：
+
+```text
+evidence_id
+source_id
+grade = A/B/C/D
+claim
+span:
+  start_time
+  end_time
+  paragraph_anchor
+  page_locator
+  image_id
+notes
+```
+
+真实中金所例子已经编码为：
+
+```text
+source = 第二小节_转写结果.docx
+time ≈ 06:53–08:17
+image = image-01.jpg
+grade = A
+claim = 中金所会员分级图及三类结算会员权限是老师明确强调的重点
+```
+
+并另设：
+
+```text
+grade = D
+ASR conflict
+```
+
+表示前段转写冲突。
+
+因此：
+**“老师强调 + 原始图 + 时间戳 + ASR冲突”已经可以在一个可验证机器模型里共同存在。**
+
+---
+
+## 37. Gold 10 题已显式绑定 KnowledgeUnit
+
+不再只靠 tag 推测。
+
+例如：
+
+```text
+gold-q4
+→ ku-cffex-member-types
+→ ev-cffex-diagram
+```
+
+基差题：
+
+```text
+gold-q7
+→ ku-basis
+→ ev-basis
+```
+
+保险+期货：
+
+```text
+gold-q10
+→ ku-insurance-futures
+→ ev-insurance-futures
+```
+
+这为：
+- Question Bank；
+- Attempt；
+- Mastery；
+- 错题分析；
+- 墨墨卡生成；
+- Planner
+
+提供同一知识 ID。
+
+---
+
+## 38. DeepTutor 不需要新增后端才能做 Rich Import
+
+进一步检查 DeepTutor 已有：
+
+```text
+POST /question-notebook/entries/upsert
+```
+
+对应 `UpsertEntryRequest` 原生已经接受：
+
+- origin_type / origin_ref
+- question_id
+- question / type / options
+- correct_answer / explanation / difficulty
+- source
+- material_id / material_title
+- section_id / section_title
+- mastery_path_id
+- knowledge_point_id
+- attempt_count
+- hints_used
+- confidence
+- response_time
+- quality
+
+因此 Round 4 里说“需要新增 rich importer”现在可以进一步收窄：
+
+> **不一定需要 fork DeepTutor backend；我们可以先做外部 Adapter，直接调用现有 rich upsert surface。**
+
+---
+
+## 39. Rich pre-population → same Question entry → Assessment → LearningEvidence：LIVE PASS
+
+新建隔离 DB / LearningStore，先把 `gold-q4` 作为：
+
+```text
+origin_type = document_analysis
+origin_ref = lesson:futures-w2l1:gold-questions
+result = ungraded
+material_id = futures-w2l1
+mastery_path_id = futures-w2l1
+knowledge_point_id = ku-cffex-member-types
+```
+
+预置到 Question Notebook。
+
+随后对同一题提交错误答案 A。
+
+真实结果：
+
+```json
+{
+  "pre": {
+    "id": 1,
+    "result": "ungraded",
+    "mastery_path_id": "futures-w2l1",
+    "knowledge_point_id": "ku-cffex-member-types"
+  },
+  "assessment_outcome": {
+    "entry_id": 1,
+    "upserted": true,
+    "attempt_recorded": true,
+    "diagnostics": ["linked_retention_updated"]
+  },
+  "post": {
+    "id": 1,
+    "result": "incorrect",
+    "user_answer": "A"
+  },
+  "same_entry_id": true,
+  "learning_evidence": 1,
+  "retention_review_count": 1
+}
+```
+
+SQLite 直接检查也确认：
+
+```text
+assessment_attempts:
+  attempt_id = rich-gold-q4-a1
+  notebook_entry_id = 1
+  origin_type = document_analysis
+  question_id = gold-q4
+  result = incorrect
+  mastery_path_id = futures-w2l1
+  knowledge_point_id = ku-cffex-member-types
+```
+
+因此完整目标链已经实证：
+
+```text
+LessonState
+→ CanonicalQuestion
+→ DeepTutor Question Notebook（预置、未答）
+→ 用户真实回答
+→ 同一 entry 更新
+→ immutable assessment_attempt
+→ LearningEvidence
+→ retention state
+```
+
+这基本解决了“题库如何和掌握度真正接起来”的核心技术不确定性。
+
+---
+
+# Round 6 — Markji Offline/Mock Gate（2026-10-04）
+
+## 40. 墨墨制卡语法已按当前已验证文档建立保守规则
+
+参考：
+
+- 墨墨开放 API：<https://open.maimemo.com/>
+- AI 制卡语法指南：<https://tutuji333.github.io/markji-faq/questions/content/card-syntax-guide/>
+
+当前语法合同采用“只生成已验证语法，不猜标签”的原则。
+
+至少覆盖：
+
+- 真实换行；
+- 独占一行的 `---` 答案线；
+- `[P#...#...]` 段落；
+- `[T#...#...]` 文本；
+- `[F#n#...]` 挖空；
+- `[E##...]` KaTeX 公式；
+- `[Choice##...]` 单选；
+- `[Choice#multi#...]` 多选；
+- `fixed` 固定选项顺序；
+- `[Pic#ID/<file.id>#]`；
+- `[Audio#ID/<file.id>#...]`；
+- `[Card#ID/<root_id>#...]`；
+- link URL 编码规则。
+
+没有验证的标签/嵌套不生成。
+
+---
+
+## 41. Markji syntax validator 原型：SELFTEST PASS
+
+本地 prototype 已实现保守 validator，并做反例测试。
+
+能拦截：
+
+```text
+literal \n
+HTML tags
+unresolved <imageFileId> 等占位符
+单选出现多个 *
+多选只有一个 *
+Choice 未闭合
+裸 $...$ / $$...$$ 数学公式
+缺少答案线（warning）
+```
+
+Self-test：
+
+```text
+valid_basic        PASS
+literal_newline    detected
+html               detected
+unresolved_media   detected
+bad_single         detected
+bad_multi          detected
+valid_formula      PASS
+
+SELFTEST_PASS
+```
+
+---
+
+## 42. 真实 Gold LessonState → Markji dry-run bundle：PASS
+
+从：
+
+```text
+futures_w2l1_gold.lesson_state.json
+```
+
+当前生成：
+- 5 张基础知识记忆卡；
+- 2 张原生选择题卡；
+
+合计：
+
+```text
+cards = 7
+validation errors = 0
+validation warnings = 0
+```
+
+每张卡生成：
+
+```text
+content_sha256
+```
+
+作为第一版 idempotency key。
+
+这还不是最终所有卡片策略；它只是证明：
+**LessonState → Markji syntax 可以完全离线验证，不需要先购买会员/API。**
+
+---
+
+## 43. markji-sync 已变成独立可执行 CLI prototype
+
+位置：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\markji-sync-prototype
+```
+
+隔离 venv 中已经成功安装 console script：
+
+```text
+markji-sync.exe
+```
+
+当前命令：
+
+```text
+markji-sync doctor
+markji-sync capabilities
+markji-sync render-bundle --lesson-state ... --output ...
+markji-sync sync --bundle ... --dry-run
+```
+
+### doctor
+
+真实返回：
+
+```json
+{
+  "schema": "markji.sync-doctor.v1",
+  "version": "0.0.1",
+  "status": "PASS_OFFLINE",
+  "transport": "NOT_CONFIGURED",
+  "api_called": false,
+  "safety": "NO_REAL_WRITE_WITHOUT_EXPLICIT_TRANSPORT_AND_NON_DRY_RUN"
+}
+```
+
+### capabilities
+
+当前协议：
+
+```text
+markji.sync-capabilities.v1
+protocol_version = 1
+```
+
+明确区分：
+- doctor：无网络/无写入；
+- render_bundle：仅本地产物；
+- sync_dry_run：无远程写入；
+- sync_real：网络 + 远程写，目前 disabled。
+
+### dry-run
+
+真实返回：
+
+```json
+{
+  "schema": "markji.sync-receipt.v1",
+  "status": "PASS",
+  "mode": "dry-run",
+  "api_called": false,
+  "remote_writes": 0,
+  "cards_planned": 7
+}
+```
+
+并输出 7 个稳定 SHA-256 idempotency keys。
+
+---
+
+## 44. 为什么现在没有填真实 HTTP endpoint
+
+本轮可以打开官方入口 <https://open.maimemo.com/>，但当前静态 Web 检索环境无法可靠展开其 JS OpenAPI 页面到每一个 method/path。
+
+因此 prototype **刻意没有猜 endpoint**。
+
+真实 transport 保持：
+
+```text
+NOT_CONFIGURED
+```
+
+这是正确的安全边界。
+
+等用户开通会员拿到 API Key 后：
+1. 读取/导出官方 OpenAPI 当前版本；
+2. 把真实 method/path/schema 固化；
+3. 先 read-only auth/list；
+4. TEST deck；
+5. create/read/update/delete smoke；
+6. 再启用 `sync_real`。
+
+在此之前不需要 API key，也不会造成真实墨墨写入。
+
+---
+
+## 45. 当前总判断
+
+到这一轮为止，三个最核心的不确定性已经大幅降低：
+
+### 课程材料能否自动结构化？
+**底层解析 PASS，LessonState schema PASS；LLM Lesson Processor 尚待自动生成质量评测。**
+
+### 题库能否和真实掌握度闭环？
+**PASS。已经真实跑通 Question → Attempt → Mistake/Evidence → Retention。**
+
+### 墨墨能否在买 API 前先把我们这一侧做完？
+**PASS。Offline renderer / validator / dry-run CLI 已经可以工作。**
+
+下一道最高价值 Gate：
+
+> **用实际 LLM/Agent 从六份原始文件自动生成 LessonState，与 Gold fixture 做结构化差异评测。**
+
+这将决定 Lesson Processor prompt / skill / multi-agent 是否达到当前人工 GPT 流程的质量。
