@@ -1487,3 +1487,375 @@ UACP / Web Agent Bridge = 自动化执行层
 ```
 
 仍然不创建正式项目仓库，直到 Gate A/B 至少跑通。
+
+
+---
+
+# Round 4 — Question Bank / Practice / Linked Evidence Live Spike（2026-10-04）
+
+## 27. Gold Baseline 10 道主动检验 → DeepTutor 导入：PASS
+
+已把现有 GPT Gold Baseline 中的 10 道主动检验题映射为 DeepTutor 当前原生 Question schema，并生成：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\w2l1_questions.json
+D:\Projects\_spikes\deeptutor-real-course-20261004\w2l1_questions_preview.json
+```
+
+调用：
+
+```python
+deeptutor.services.practice.importing.preview(...)
+```
+
+结果：
+
+```text
+questions = 10
+errors = 0
+```
+
+说明现有这节课的主动检验可以无损落到 DeepTutor 当前支持的：
+- true_false
+- single_choice
+- short_answer
+
+本节暂时没有必须依赖 matching / ordering / calculation 专用题型的 blocker；基差计算目前可作为 short_answer 执行，但长期仍应增加 `calculation` 一等题型。
+
+---
+
+## 28. Question Bank 真实 SQLite 导入：PASS
+
+使用隔离 DB：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\isolated_question_bank.sqlite
+```
+
+执行 DeepTutor 原生：
+
+```python
+PracticeStore.stage_import(...)
+PracticeStore.commit_import(...)
+```
+
+第一次导入：
+
+```json
+{
+  "created": 10,
+  "duplicates": 0,
+  "total": 10
+}
+```
+
+完全相同题目第二次导入：
+
+```json
+{
+  "created": 0,
+  "duplicates": 10,
+  "total": 10
+}
+```
+
+**结论：题库文件重复导入的内容级幂等性真实 PASS。**
+
+Question Bank 统计：
+
+```json
+{
+  "total": 10,
+  "wrong": 0,
+  "unresolved": 0,
+  "bookmarked": 0,
+  "uncategorized": 0
+}
+```
+
+Tags 自动形成 16 个 categories，例如：
+- W2L1
+- 中金所
+- 会员分级
+- 期货市场
+- 交易所职能
+- 基差
+- 风险
+- 履约风险
+- 期货公司
+- 保险+期货
+- 风险管理
+
+---
+
+## 29. Practice 真实作答闭环：PASS
+
+在上述真实隔离 Question Bank 中模拟两次实际作答：
+
+### 错题
+
+题：
+
+> 某会员可以交易，也可以给自己的客户结算，但不能给其他交易会员结算。它最可能属于哪类？
+
+正确答案：B（交易结算会员）  
+模拟提交：A
+
+DeepTutor 结果：
+
+```json
+{
+  "correct": false,
+  "rating": "again",
+  "is_mistake": true,
+  "review_count": 1,
+  "lapses": 1,
+  "streak": 0,
+  "interval_days": 0.007,
+  "mastered": false
+}
+```
+
+### 正确题
+
+题：
+
+> 某机构自己不能在交易所做期货交易，但可以替非结算会员结算。它属于哪一类？
+
+正确答案：D（特别结算会员）  
+模拟提交：D
+
+DeepTutor 结果：
+
+```json
+{
+  "correct": true,
+  "rating": "good",
+  "is_mistake": false,
+  "review_count": 1,
+  "lapses": 0,
+  "streak": 1,
+  "interval_days": 3.0,
+  "mastered": true
+}
+```
+
+作答后 Practice summary：
+
+```json
+{
+  "total": 10,
+  "mistakes": 1,
+  "due": 8,
+  "reviewed_today": 2
+}
+```
+
+并真实写入 `practice_review_events` 两条事件。
+
+**因此：**
+`Question → Answer → correctness → mistake state → next review interval → analytics`
+已经可以直接复用 DeepTutor。
+
+---
+
+## 30. Cross-surface linked assessment → learning evidence：PASS
+
+另建隔离：
+- SQLite assessment DB
+- LearningStore
+
+创建真实知识点：
+
+```text
+path = futures-w2l1
+module = clearing-members
+kp = kp-clearing-member-types
+name = 中金所结算会员分类与权限
+type = concept
+```
+
+对同一道题记录：
+1. 第一次回答错误；
+2. 700 秒后第二次回答正确。
+
+通过 DeepTutor 原生 `record_assessment()`，并显式给出：
+- mastery_path_id
+- knowledge_point_id
+
+结果：
+
+```text
+immutable attempts = 2
+learning evidence = 2
+repetition_state.review_count = 2
+repetition_state.lapse_count = 1
+review_queue_count = 1
+latest projection = correct
+```
+
+两次都返回：
+
+```text
+linked_retention_updated
+```
+
+并且 Question Notebook 的 latest projection 正确更新为第二次答案，而两次 attempt 均保留在 immutable attempt log。
+
+**这验证了最关键的一条技术链：**
+
+```text
+一个题目
+→ 显式 knowledge point linkage
+→ immutable attempt
+→ LearningEvidence
+→ retention state
+→ review queue
+```
+
+这部分不用我们重造。
+
+---
+
+## 31. 发现一个重要接口缺口：generic file import 会丢失 Knowledge linkage
+
+虽然 DeepTutor 内部 `AssessmentRecord` 已支持：
+
+- mastery_path_id
+- knowledge_point_id
+- material_id
+- section_id
+- confidence
+- response_time
+- quality
+
+但是当前 `PracticeStore.commit_import()` 的通用 CSV/XLSX/JSON import 路径只把文件题写成：
+
+```text
+origin_type = external_import
+origin_ref = practice-import
+source = import
+material_title = filename
+material_id = import:<preview token>
+result = ungraded
+```
+
+并**没有从导入 schema 接受/写入**：
+- mastery_path_id
+- knowledge_point_id
+- source_refs / EvidenceRef
+- canonical material_id / section_id
+
+因此当前普通文件导入虽然能进题库、做题、生成错题，但不会天然更新对应知识点的 retention/mastery。
+
+这是我们必须补的扩展点。
+
+### 推荐方案
+
+不要修改用户手工导入兼容路径的基本行为。
+
+新增一个受控的 Learning Adapter，例如：
+
+```text
+CanonicalQuestion
+    ↓
+deeptutor-learning-import
+    ↓
+Assessment / Question Notebook
+    + mastery_path_id
+    + knowledge_point_id
+    + material_id
+    + section_id
+    + EvidenceRef
+```
+
+即：
+
+- 普通用户文件 → DeepTutor 原生 importer；
+- 我们 Lesson Processor 生成的题 → rich importer / assessment adapter。
+
+这样保留上游兼容性，也能实现完整掌握度闭环。
+
+---
+
+## 32. Windows 运行时发现的小缺口：tzdata 未被默认依赖带入
+
+在 Windows Python 3.13 隔离安装后，首次调用：
+
+```python
+practice.overview("Asia/Shanghai")
+```
+
+报：
+
+```text
+ZoneInfoNotFoundError
+No module named 'tzdata'
+```
+
+手动在隔离 venv 安装：
+
+```text
+tzdata
+```
+
+后：
+- Asia/Shanghai 正常；
+- Practice analytics 正常。
+
+这不是我们的架构 blocker，但如果以后 Windows 本地部署 DeepTutor，需要在安装脚本/环境检查中显式处理。
+
+建议我们的 bootstrap doctor 检查：
+
+```text
+ZoneInfo("Asia/Shanghai")
+```
+
+不通过则提示/安装 tzdata。
+
+---
+
+## 33. Gate B 当前结论
+
+原 Gate B：
+
+> Question Bank live injection + Attempt → Mistake → Practice → Mastery evidence
+
+现在拆成：
+
+| 子项 | 结果 |
+|---|---|
+| Gold 10题 → DeepTutor parser | **PASS** |
+| 10题真实入 SQLite Question Bank | **PASS** |
+| 重复导入幂等 | **PASS** |
+| tags/categories | **PASS** |
+| 实际正确/错误判定 | **PASS** |
+| mistake capture | **PASS** |
+| review event | **PASS** |
+| adaptive next-review state | **PASS** |
+| 真实 immutable assessment attempts | **PASS** |
+| explicit KP linkage → LearningEvidence | **PASS** |
+| linked evidence → retention/review queue | **PASS** |
+| generic JSON import 自动 KP linkage | **FAIL / EXTEND** |
+| imported question → concept mastery 自动更新 | **需要 rich importer** |
+
+因此 Gate B 的底层可行性已基本成立，剩下的是我们的 Adapter，而不是 DeepTutor 核心能力缺失。
+
+---
+
+## 34. 当前优先级再次调整
+
+现在不应该先做“自己的题库系统”。
+
+DeepTutor 已经覆盖题库执行面。
+
+我们的下一批开发重点应缩为：
+
+1. `LessonState` canonical schema；
+2. `EvidenceRef / SourceSpan`；
+3. `CanonicalQuestion -> DeepTutor rich importer`；
+4. `Coverage / Mastery policy`；
+5. `markji-sync mock`；
+6. 最后才是自动 watcher / UACP wiring。
+
+下一道 Gate：**Gold Baseline LessonState fixture + schema**。
