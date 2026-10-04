@@ -2861,3 +2861,81 @@ Web GPT / Agent Processor
 ```
 
 从这一轮开始，后续期货市场自动化不再依赖人工发送启动口令。
+
+
+---
+
+# Round 10 — UACP/Web-GPT integration gate check（2026-10-04）
+
+## 62. Decision: DEFER Web-GPT auto-upload integration for now
+
+Inspected current local repository:
+
+```text
+D:\Projects\universal-agent-control-plane
+branch = feat/issue9-dot-opendots-poc-plan-20261003
+HEAD   = 9510080064a4dff0f3388dc9985dc496a113202e
+```
+
+Current UACP evidence says:
+
+- Browser Bridge fresh-chat text E2E: PASS.
+- exact bound ChatGPT tab / exactly-one-send / response archive: PASS.
+- Browser Bridge **automatic ChatGPT file attachment**: not accepted as production capability.
+- current PROJECT_STATE explicitly says `production attachment: NOT REACHED`.
+- historical docs also explicitly deferred automatic file attachment until text transport was proven.
+- OpenDots current accepted path is read-only; computer/browser/files/shell are OFF.
+
+A different path, AA/DSH, **does** have real live attachment acceptance:
+
+```text
+Windows input bundle
+→ Agents Anywhere
+→ Mac connector
+→ DSH
+→ model
+= LIVE E2E PASS
+```
+
+including multi-provider PaperWB worker/reviewer/controller acceptance.
+
+However, that is not the same requirement as:
+
+```text
+local lesson bundle
+→ logged-in ChatGPT Web conversation
+→ upload DOCX/images
+→ run the user's course prompt
+→ collect GPT Web output
+```
+
+Therefore do **not** wire Learning System ingestion jobs into UACP Browser Bridge yet.
+
+### Current boundary
+
+Keep:
+
+```text
+learning.ingestion-job.v1
+state = READY_FOR_AI
+```
+
+as the stable handoff boundary.
+
+Do not implement a temporary brittle uploader merely for this project.
+
+When UACP later exposes an accepted ChatGPT Web attachment transport, the learning pipeline can attach at this boundary without changing LessonState, DeepTutor, benchmark, or Markji layers.
+
+### What can be reused now
+
+The following UACP patterns are already mature enough to borrow later:
+- durable JobStore;
+- short-call status/collect;
+- attachment manifest + SHA-256 pattern;
+- bounded input bundle;
+- provider result receipt;
+- reviewer/controller gate;
+- UTF-8 boundary hardening;
+- idempotent/replayable task state.
+
+For now, Learning System proceeds independently of Web-GPT transport.
