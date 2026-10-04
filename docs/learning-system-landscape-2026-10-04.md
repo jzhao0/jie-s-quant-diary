@@ -2939,3 +2939,268 @@ The following UACP patterns are already mature enough to borrow later:
 - idempotent/replayable task state.
 
 For now, Learning System proceeds independently of Web-GPT transport.
+
+
+---
+
+# Round 11 — Mastery / Planner prototype（2026-10-04）
+
+## 63. Mastery 不再等于“最近答对率”
+
+继续对比后，当前推荐的职责拆分是：
+
+```text
+Markji
+= 记忆卡间隔复习执行器
+
+DeepTutor Practice
+= 题目级复习 / 错题 / review queue
+
+Learning Core Mastery
+= 概念级掌握度
+
+Planner
+= 今天优先学什么 / 测什么 / 补什么
+```
+
+因此不再让 Learning Core 再实现一个与墨墨竞争的卡片 scheduler。
+
+---
+
+## 64. 外部实现选择
+
+### py-fsrs
+Repo: https://github.com/open-spaced-repetition/py-fsrs
+
+MIT；支持 FSRS、retrievability、JSON serialization、后续使用个人 review logs 优化参数。
+
+**当前结论：**
+算法成熟，但我们不应在 Learning Core 重复调度墨墨卡。
+
+可用于：
+- 将来题目级复习若要替换 DeepTutor SM-2-style scheduler；
+- 其他非墨墨学习 surface；
+- 算法对照/验证。
+
+### CAHLR/pyBKT
+Repo: https://github.com/CAHLR/pyBKT
+
+Berkeley/CAHLR 的 BKT 实现，可根据问题序列估计认知掌握度，并支持不同学生/item 的 guess/slip/learn-rate 变体。
+
+**当前结论：**
+长期真实行为数据积累后，适合用于参数拟合/校准，不适合在只有几次作答时直接声称“科学拟合了你的掌握度”。
+
+### LearningOS
+Repo: https://github.com/markmcnair/learningos
+
+其 `ENGINE_SPEC.md` 的设计值得借：
+- FSRS 做 item retention；
+- BKT 做 concept mastery；
+- prerequisite graph；
+- successive relearning；
+- AI explanation / remedial practice 不自动算成掌握；
+- 只有 retrieval evidence 才推动 advancement；
+- transfer/application item 作为高级 mastery gate。
+
+但代码审查发现它的 `fsrs.ts` 注释称 FSRS-6，默认权重实际是 19 个 FSRS-5 weights，而当前官方 py-fsrs 使用 21 个参数。
+
+**因此：借 LearningOS 的职责分层和 pedagogy，不直接采用它的 FSRS 实现作为 canonical scheduler。**
+
+### StudyForge
+
+一个尤其值得保留的规则：
+
+> re-teaching / remedial practice 是学习事件，不应重置间隔、不应把 concept 直接标成已掌握；是否真正学会，要看下一次 cold scheduled retrieval。
+
+这条规则与我们的系统目标完全一致。
+
+---
+
+## 65. Mastery Policy v0.1
+
+隔离 prototype：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\mastery\mastery_policy_v0_1.py
+```
+
+当前只使用真实/模拟 Attempt evidence，不拿“老师讲过”“AI解释过”“看过答案”充当掌握证据。
+
+v0.1：
+
+```text
+BKT cold-start:
+pL0 = 0.25
+pT  = 0.15
+pS  = 0.10
+pG  = 0.20
+
+partial threshold = 0.60
+mastery threshold = 0.95
+mastered 还要求 >= 3 个分隔日期的正确 recall
+```
+
+重要：
+- 这些只是 cold-start policy，不是假装已经用用户历史拟合；
+- 后续数据够多再用 pyBKT / holdout evaluation 校准；
+- UI 必须显示 evidence count / confidence。
+
+---
+
+## 66. Coverage 与 Mastery live proof
+
+使用当前期货课 Gold LessonState：
+
+```text
+Knowledge Units = 10
+完整讲授 = 7
+introduced = 3
+```
+
+因此：
+
+```text
+fully taught coverage = 70%
+coverage including introduced (0.5 weight) = 85%
+```
+
+但当前隔离 Spike 真正有作答 evidence 的只有一个 knowledge unit。
+
+所以：
+
+```text
+tested = 1 / 10 = 10%
+mastered = 0 / 10 = 0%
+```
+
+这正是我们需要的行为：
+
+> 老师已经讲了 70% ≠ 用户掌握了 70%。
+
+---
+
+## 67. 中金所会员分级示例
+
+此前隔离 Spike 对同一知识点：
+- 第一次错；
+- 第二次对；
+- 只有一个正确日期。
+
+Mastery Policy v0.1 输出：
+
+```text
+coverage = taught
+mastery = weak
+BKT P = 0.5781
+attempts = 2
+correct = 1
+incorrect = 1
+correct spaced days = 1
+confidence = low
+```
+
+即使最后一次答对，也不会错误显示：
+
+```text
+mastered
+```
+
+推荐动作：
+
+```text
+targeted_reteach_then_cold_retest
+```
+
+这比 DeepTutor 当前简单 mastery cap 更符合我们的目标。
+
+---
+
+## 68. Today Planner v0.1
+
+Planner 当前按：
+
+```text
+考试权重
++ 当前 mastery 缺口
++ 错误率
++ forgetting/due urgency
++ coverage
++ prerequisite 状态
+```
+
+排序。
+
+当前隔离数据的 top priority：
+
+1. 期货交易所五大职能 → diagnostic retrieval
+2. 中金所会员分级与权限 → targeted reteach then cold retest
+3. 期货市场与交易所范围区别 → diagnostic retrieval
+4. 会员制 vs 公司制 → diagnostic retrieval
+5. 结算机构三大职能 → diagnostic retrieval
+
+这不是正式用户学习建议，因为目前真实用户作答数据尚未接入；只是验证 Planner 能正确消费 state。
+
+---
+
+## 69. Dashboard prototype 已生成
+
+本地：
+
+```text
+mastery/mastery_snapshot.json
+mastery/today_plan.json
+mastery/dashboard_prototype.html
+```
+
+Dashboard 当前展示：
+
+- Coverage
+- Mastery
+- BKT probability
+- exam priority
+- evidence attempts
+- 今日优先知识点
+
+并明确提示：
+当前只有 Spike 模拟作答，不得把它当用户真实掌握度。
+
+---
+
+## 70. 当前算法边界
+
+不采用：
+
+```text
+一个统一“掌握率 = 正确率”
+```
+
+而采用：
+
+```text
+Coverage
+= 内容进度
+
+Mastery
+= cold retrieval / application evidence
+
+Memory retention
+= 墨墨自己的记忆层
+
+Question review
+= DeepTutor Practice / later possible FSRS
+
+Planner
+= 融合 exam + mastery + due + prerequisite
+```
+
+后续考试/考研还可再加入：
+
+```text
+exam syllabus weight
+past-paper frequency
+days remaining
+target score
+available study time
+```
+
+但不在当前假数据阶段过早调权重。
