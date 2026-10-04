@@ -1144,3 +1144,346 @@ DeepTutor CLI Apps 本身就是“管理员安装、Agent 以结构化 argv 调�
 在这个 Spike 之前：
 **继续不建正式独立仓库，不进行真实 Markji API 写入。**
 
+
+
+---
+
+# Round 3 — DeepTutor Real-Course Parser Spike（真实课程，2026-10-04）
+
+## 19. 实验环境
+
+已在 Windows 设备上创建**隔离 spike**，没有改动现有项目：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004
+├─ source\        # HKUDS/DeepTutor shallow clone
+├─ .venv\         # 独立 Python 3.13 环境
+├─ source_audit.py
+├─ probe_deeptutor_extract.py
+├─ probe_images.py
+└─ extract_probe.json
+```
+
+DeepTutor 源码安装已成功完成（Python 3.13.2，`uv pip install -e .`）。
+
+真实课程目录：
+
+```text
+D:\文件\学校\大三上\期货市场\第二周第一节
+├─ 第一小节_AI纪要.docx
+├─ 第一小节_笔记.docx
+├─ 第一小节_转写结果.docx
+├─ 第二小节_AI纪要.docx
+├─ 第二小节_笔记.docx
+└─ 第二小节_转写结果.docx
+```
+
+未对原课程文件做任何写操作。
+
+---
+
+## 20. 真实源文件审计
+
+### 第一小节
+
+| 文件 | 体量 | 时间戳 | 内嵌图 |
+|---|---:|---:|---:|
+| 第一小节_转写结果.docx | ~9.9k extracted chars | 106 | 0 |
+| 第一小节_AI纪要.docx | ~1.9k chars | 0 | 0 |
+| 第一小节_笔记.docx | 仅标题 | 0 | 0 |
+
+### 第二小节
+
+| 文件 | 体量 | 时间戳 | 内嵌图 |
+|---|---:|---:|---:|
+| 第二小节_转写结果.docx | ~9.7k extracted chars | 104 | **1 JPEG** |
+| 第二小节_AI纪要.docx | ~1.9k chars | 0 | 0 |
+| 第二小节_笔记.docx | 仅标题 | 0 | 0 |
+
+第二小节原始 DOCX 内确实包含：
+
+```text
+word/media/image1.jpeg
+```
+
+大小约 152,899 bytes。
+
+---
+
+## 21. DeepTutor 原生 DOCX extractor：真实结果
+
+调用：
+
+```python
+deeptutor.utils.document_extractor.extract_text_from_path(...)
+```
+
+对六份真实文件全部成功，无需 LLM。
+
+### 21.1 时间戳保留：PASS
+
+DeepTutor 原生 text extraction 保留了逐字稿中的时间戳。
+
+例如第二小节提取后仍可看到：
+
+```text
+说话人1 06:53
+让我们观察中金所的结算制度图……
+
+说话人1 07:09
+……
+
+说话人1 07:40
+……
+[图片 1: image-01.jpg]
+
+说话人1 07:58
+……
+```
+
+并保留 `08:17` 等后续时间戳。
+
+**结论：**
+我们不需要为了“逐字稿 timestamp”重写 DOCX parser。
+
+---
+
+### 21.2 DOCX 内嵌图片：PASS，而且不是只留占位符
+
+DeepTutor 的 `document_images.extract_docx_rich()` 在真实第二小节中输出：
+
+```text
+images = 1
+image-01.jpg
+mime = image/jpeg
+bytes = 152899
+```
+
+并在正文中保留固定 marker：
+
+```text
+[图片 1: image-01.jpg]
+```
+
+源码设计明确表明：
+- image marker 留在 text reading order；
+- raster bytes 单独作为 image attachment；
+- vision-capable model 可接收真实图片；
+- Reading surface 可将 marker 映射回 section locator。
+
+**这个结果比 Round 2 的静态判断更好：课堂 PPT 截图并不会在 DeepTutor 中天然丢失。**
+
+---
+
+### 21.3 “图与讲解上下文”可以锚定：PASS（段落级）
+
+真实提取结果中，中金所结算图 marker 位于以下语义区间：
+
+```text
+06:53 让我们观察中金所的结算制度图……
+07:09 交易结算会员……
+07:40 全面结算会员……
+[图片 1: image-01.jpg]
+07:58 因此……
+```
+
+说明我们能够构造：
+
+```text
+EvidenceRef
+├─ file = 第二小节_转写结果.docx
+├─ time_window ≈ 06:53–07:58
+├─ embedded_image = image-01.jpg
+├─ local paragraph anchor
+└─ related concept = 中金所会员分级结算
+```
+
+这是实现“老师说图 + 图本身 + 时间戳”三者关联的关键基础。
+
+---
+
+## 22. 一个重要限制：DOCX 的“Page 5”不是原生文档语义
+
+DOCX 本质不是固定分页格式。
+
+DeepTutor 的 text/OOXML extraction 可以稳定保留：
+- 段落顺序；
+- 图片位置；
+- 时间戳；
+- 图片 bytes。
+
+但不能仅靠 DOCX XML 稳定声称：
+
+```text
+这张图在 Word 第5页
+```
+
+DeepTutor 的**paged Office preview**需要系统存在 `soffice` / LibreOffice，把 Office 文档渲染为 PDF 再提供真实 page boundary。
+
+本机本轮检查：
+
+```text
+soffice = NOT INSTALLED / NOT ON PATH
+libreoffice = NOT INSTALLED / NOT ON PATH
+```
+
+所以当前 Spike 已确认的是：
+
+```text
+paragraph/timestamp/image provenance = PASS
+Word rendered page number = BLOCKED_BY_SOFFICE
+```
+
+如果以后确实需要“Page 5”作为 provenance：
+1. 可安装 LibreOffice / soffice；
+2. 或者我们优先存 paragraph/source span，page 仅作为 presentation locator；
+3. 不应把可变 Word pagination 当成唯一 canonical identity。
+
+**推荐 canonical identity：**
+`file + paragraph/span + timestamp + image id`  
+Page number只做辅助 locator。
+
+---
+
+## 23. DeepTutor 对本节原始输入的保真度判断
+
+| 输入信息 | 实测 |
+|---|---|
+| 中文正文 | PASS |
+| DOCX 标题/段落 | PASS |
+| transcript timestamp | PASS |
+| AI纪要正文 | PASS |
+| 空笔记识别 | PASS |
+| embedded JPEG | PASS |
+| image marker reading-order anchor | PASS |
+| image bytes 可供 vision | PASS |
+| Word 固定页码 | 当前 BLOCKED（无 soffice） |
+| [A/B/C/D] evidence grade | 尚无，需要扩展 |
+| ASR conflict graph | 尚无，需要 Lesson Processor |
+
+因此“先把六个 DOCX 统一转 Markdown 再丢给 DeepTutor”并不是必须步骤。
+
+DeepTutor 自己的 parser 已经能保留我们最关心的：
+**text + timestamp + embedded image order**。
+
+anydoc 仍有价值，但定位调整为：
+- legacy Office / 更多异构格式；
+- normalization fallback；
+- 外部批处理；
+而不是所有 DOCX 的强制前置层。
+
+---
+
+## 24. Real-Course Spike 当前 Gate 更新
+
+| Gate | Round 2 | Round 3 实测 |
+|---|---|---|
+| 真实六文件可读取 | NOT TESTED | **PASS** |
+| transcript timestamp | 静态 PASS | **PASS (live)** |
+| embedded classroom image | 静态推测 | **PASS (live)** |
+| image 与正文相对位置 | 未确认 | **PASS** |
+| image bytes 可抽取 | 未确认 | **PASS** |
+| DOCX page number | 未确认 | **BLOCKED / presentation-only** |
+| 原生 Lesson Report 质量 | NOT TESTED | 待模型运行 |
+| LessonState JSON | NOT TESTED | 待自定义 schema |
+| Question Bank injection | NOT TESTED | 下一步 |
+| Attempt/Mistake write | 代码 PASS | 下一步 live |
+| Mastery linkage | 代码 PASS | 下一步 live |
+| Markji mock CLI App | 未实现 | 后续 |
+
+---
+
+## 25. 下一步已收窄
+
+接下来不再花时间证明“DeepTutor 能不能读这些 Word”。
+
+已经证明能。
+
+下一道真实 Gate 是：
+
+### Gate A — Gold Baseline Lesson Processor
+
+输入六文件，要求输出两份产物：
+
+```text
+lesson_report.md
+lesson_state.json
+```
+
+其中 `lesson_report.md` 必须和现有 GPT Gold Baseline 对比：
+
+- 知识覆盖；
+- 老师强调信号；
+- ASR 冲突；
+- 中金所图；
+- 期货交易所五大职能；
+- 全员 vs 分级结算；
+- 期货公司四类业务；
+- 风险管理子公司；
+- 课程债务；
+- 主动检验题。
+
+`lesson_state.json` 则必须正式引入：
+
+```text
+Source
+SourceSpan
+EvidenceRef
+KnowledgeUnit
+CoverageStatus
+Question
+Misconception
+UnresolvedConflict
+FlashcardCandidate
+```
+
+### Gate B — Question Bank live injection
+
+把 Gold Baseline 的主动检验题转换成 DeepTutor 原生：
+- CSV/JSON import；
+- knowledge point linkage；
+- source/material linkage；
+- explanation；
+- difficulty。
+
+然后真实答题一次，验证：
+`Attempt → Mistake → Practice → Mastery evidence`。
+
+### Gate C — Markji mock bridge
+
+先不使用真实 API key。
+只验证 DeepTutor Skill/CLI App 能调用独立 `markji-sync --dry-run` 并返回 receipt。
+
+---
+
+## 26. 当前新的架构倾向
+
+Real-Course parser Spike 之后，DeepTutor-based 路线的可行性进一步上升。
+
+目前更倾向：
+
+```text
+DeepTutor = 学习工作台 + 原始学习执行层
+     │
+     ├─ Reading / KB / Files
+     ├─ Question Bank
+     ├─ Practice / Mistake
+     ├─ Chat / Skills / MCP
+     └─ basic Mastery Path
+
+Our Extension = 课程严谨性 + 个性化策略层
+     │
+     ├─ Lesson Processor
+     ├─ EvidenceRef / SourceSpan
+     ├─ [A]/[B]/[C]/[D]
+     ├─ ASR conflict handling
+     ├─ Coverage != Mastery
+     ├─ richer BKT/FSRS policy
+     └─ global Planner
+
+markji-sync = 独立 Memory Adapter
+
+UACP / Web Agent Bridge = 自动化执行层
+```
+
+仍然不创建正式项目仓库，直到 Gate A/B 至少跑通。
