@@ -2676,3 +2676,188 @@ READY_FOR_AI
 这样课程自动化项目和 Learning System 不耦合具体浏览器实现。
 
 换 Web GPT / API / 本地模型时，job contract 不变。
+
+
+---
+
+# Round 9 — 原始 Prompt 正式归档 + Amendment 生效 + Watcher Prompt-aware（2026-10-04）
+
+## 56. 原始「期货市场」Prompt 已取得完整逐字原文
+
+本轮用户直接提供了完整原始 Prompt，因此此前“只确认存在、尚未取得逐字正文”的状态已经解除。
+
+正式本地归档：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\prompts\futures_market_original_prompt_v1.txt
+```
+
+原始 Prompt SHA-256：
+
+```text
+9841b07d4ed278d409f7b632fc1f66917e3e27357087e5e2030020747f1ca8d1
+```
+
+它现在正式成为期货市场课程处理规则的 Source of Truth。
+
+此前重建的 Prompt Contract v1 仅保留为：
+- benchmark 辅助规范；
+- 可机器检查的派生合同；
+
+不得再替代原 Prompt 本身。
+
+---
+
+## 57. 后续修正已单独版本化
+
+用户后续明确修正两点：
+
+1. OBS 复盘模块必须给可直接复制的复制块；
+2. 文件收齐后直接开始分析，不再等“本节文件上传完毕，开始处理”。
+
+已单独归档：
+
+```text
+futures_market_amendment_v2.txt
+```
+
+SHA-256：
+
+```text
+a0447d82a12483b8d6bd6584c3c95c9afa95b8e78cc2a3f0913a5f185df53759
+```
+
+优先级：
+
+```text
+amendment_v2 > original_v1
+```
+
+该 amendment 只覆盖旧的“等待人工确认”规则，其余证据优先级、课程输出结构、长期维护规则继续有效。
+
+---
+
+## 58. Effective Prompt v2 已冻结
+
+合并：
+
+```text
+original_v1 + amendment_v2
+```
+
+得到：
+
+```text
+futures_market_effective_prompt_v2.txt
+```
+
+SHA-256：
+
+```text
+b60ff4e1ae80554cae487c754629156076cc0c9909226497a151dd67e128d337
+```
+
+并建立：
+
+```text
+prompt_manifest.json
+schema = learning.prompt-manifest.v1
+```
+
+机器规则明确为：
+
+```json
+{
+  "auto_start_when_expected_bundle_complete": true,
+  "wait_for_manual_confirmation": false,
+  "obs_summary_copy_block_required": true
+}
+```
+
+---
+
+## 59. Watcher 现在对 Prompt 版本敏感
+
+此前 lesson fingerprint 只包含课程源文件 hash。
+
+现在改为：
+
+```text
+fingerprint =
+hash(
+  source paths + source SHA-256
+  + effective prompt SHA-256
+)
+```
+
+意义：
+
+如果课程文件完全不变，但课程提示词发生修改：
+
+```text
+旧行为：SKIP_UNCHANGED  ❌
+新行为：JOB_CREATED      ✅
+```
+
+这样 Prompt 变化会自动触发新的处理任务，不会继续复用旧分析结果。
+
+---
+
+## 60. Prompt-aware watcher live test：PASS
+
+使用同一组六份期货市场文件。
+
+由于加入了 Effective Prompt v2，生成新的 job：
+
+```text
+job-b56f9c2e30fc4de9
+```
+
+Receipt：
+
+```json
+{
+  "status": "PASS",
+  "action": "JOB_CREATED",
+  "lesson_key": "期货市场/第二周第一节",
+  "source_count": 6,
+  "prompt_sha256": "b60ff4e1ae80554cae487c754629156076cc0c9909226497a151dd67e128d337",
+  "next_state": "READY_FOR_AI",
+  "manual_confirmation_required": false,
+  "remote_writes": 0
+}
+```
+
+第二次运行同一输入：
+
+```text
+SKIP_UNCHANGED
+```
+
+因此：
+
+- source-sensitive idempotency：PASS
+- prompt-sensitive idempotency：PASS
+- auto-start semantics：PASS
+
+---
+
+## 61. 现在 Course Ingestion Contract 的正式状态
+
+```text
+课堂文件完整
+    ↓
+Watcher
+    ↓
+source + prompt fingerprint
+    ↓
+learning.ingestion-job.v1
+    ↓
+manual_confirmation_required = false
+    ↓
+READY_FOR_AI
+    ↓
+Web GPT / Agent Processor
+```
+
+从这一轮开始，后续期货市场自动化不再依赖人工发送启动口令。
