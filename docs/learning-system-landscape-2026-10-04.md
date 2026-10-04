@@ -2326,3 +2326,160 @@ NOT_CONFIGURED
 > **用实际 LLM/Agent 从六份原始文件自动生成 LessonState，与 Gold fixture 做结构化差异评测。**
 
 这将决定 Lesson Processor prompt / skill / multi-agent 是否达到当前人工 GPT 流程的质量。
+
+
+---
+
+# Round 7 — Benchmark 校准：Reference = GPT + 用户提示词（2026-10-04）
+
+## 46. 纠正此前对 Gold Baseline 来源的表述
+
+此前文档中有“人工 GPT 流程 / Gold Baseline”的说法，容易让后续 AI 误解为人工手工整理。
+
+正确来源是：
+
+```text
+用户提供课程资料
+→ 用户给 GPT 固定/长期使用的课程处理提示词
+→ GPT 生成结构化课程结果
+```
+
+因此 Reference 的准确名称改为：
+
+```text
+GPT Prompted Reference Output
+```
+
+而不是“人工整理真值”。
+
+原始课堂资料仍然是事实真值层；GPT 输出只是当前用户已经认可的质量与交互基准。
+
+---
+
+## 47. Benchmark 现在采用四层优先级
+
+```text
+1. Raw classroom sources
+2. Prompt Contract
+3. GPT Prompted Reference Output
+4. Candidate pipeline output
+```
+
+含义：
+
+- 原始转写 / 图 / 笔记决定“事实是否成立”；
+- 用户提示词决定“应该如何组织、标注、提问和维护长期知识状态”；
+- GPT Reference 用来衡量当前已认可的输出深度、结构和体验；
+- DeepTutor / Lesson Processor 候选输出与前三者比较。
+
+因此：
+
+> 不允许为了“更像 GPT Reference”而复制 GPT Reference 中可能存在的错误。
+
+---
+
+## 48. 已建立 Reference Prompt Contract v1
+
+当前没有找到最初提示词的逐字原文，因此没有伪称恢复原 prompt。
+
+已依据：
+- 当前 GPT Reference 的稳定结构；
+- 已知长期课程处理要求；
+- [A]/[B]/[C]/[D] 证据规则；
+- 主动检验；
+- 课程债务；
+- OBS 摘要；
+- 长期知识树；
+
+建立**规范合同**：
+
+```text
+Course Processing Reference Prompt Contract v1
+```
+
+核心要求包括：
+
+- 原始课堂录音 > 转写+图文 > 用户笔记 > AI纪要；
+- 转写不能无条件当老师逐字原话；
+- A/B/C/D 证据标签；
+- 按真实授课顺序重建；
+- 公式、图像、强调、考试信号必须处理；
+- 冲突不允许静默合并；
+- Coverage != Mastery；
+- 主动检验不能只有选择题；
+- 维护课程债务；
+- 输出 OBS 摘要；
+- 更新长期知识树。
+
+注意：
+
+> 这份 Prompt Contract 是“重建的规范”，不是声称逐字恢复用户原始提示词。
+
+如果后续找到原提示词，应直接用原提示词替换该 Contract。
+
+---
+
+## 49. deterministic benchmark 已建立
+
+隔离目录：
+
+```text
+D:\Projects\_spikes\deeptutor-real-course-20261004\benchmark
+```
+
+Reference GPT Output 已完整保存：
+
+```text
+reference_gpt_output.md
+1859 lines
+```
+
+Benchmark 维度：
+
+```text
+15 结构
+30 核心知识覆盖
+15 证据纪律
+15 考试信号 / 冲突 / 课程债务
+10 主动检验
+ 5 OBS + 长期知识树
+10 LessonState 机器状态
+----------------
+100
+```
+
+把现有 GPT Prompted Reference 自己跑回 benchmark：
+
+```text
+score = 100 / 100
+```
+
+用于校准测试器本身。
+
+这不是证明 Reference“事实 100% 正确”，而是证明 benchmark 能识别当前 Reference 所体现的全部规范要求。
+
+---
+
+## 50. 下一步评价标准
+
+候选 Lesson Processor 的输出将不再用模糊的“感觉像不像以前 GPT”。
+
+而是：
+
+```text
+>=95  Reference-level structure/source coverage
+85-94 strong candidate，人工检查漏项
+70-84 有用，但不能替代当前 GPT + prompt 工作流
+<70    暂不能接管
+```
+
+此外还有独立 factuality gate：
+
+- 每个 A/B 结论必须可回指 Raw Source；
+- C 必须明确是补充解释；
+- D 不允许被自动“修正掉”；
+- 不允许 candidate 因为知道金融知识而覆盖老师课堂口径。
+
+下一步继续跑：
+
+> **同样六份原始文件 → 自动 Lesson Processor → benchmark + raw-source factuality audit。**
