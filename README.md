@@ -45,7 +45,7 @@ jupyter lab
    - 可复用函数 (scripts/)
    - 测试用例 (tests/)
 
-## 🧭 研究、论文与工程 Idea Bank
+## 🧭 研究、论文与工程 Idea Bank\n- [AI 辅助开发：避免过度工程化的第一性原理（2026-10-16）](docs/ai-assisted-development-principles-2026-10-16.md) — 可用于其他项目的开发节奏、测试尺度、Agent 分工和专业知识核实原则。\n
 
 - [Research & Patent Idea Bank](docs/research-and-patent-idea-bank.md) — 跨金融、经济、数学、统计、计算机的专利筛选与可开发技术想法库。
 - [Patent screening log — 2026-09-04](docs/patent-screening-log-2026-09-04.md) — 本轮跨学科现有技术攻击、候选降级记录与下一步检索队列。
