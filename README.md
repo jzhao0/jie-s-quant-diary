@@ -45,6 +45,10 @@ jupyter lab
    - 可复用函数 (scripts/)
    - 测试用例 (tests/)
 
+## 📒 公开交易日记与复盘
+
+- [2026-09-14—10-19｜乙二醇EG2610/EG2611期货及EG2611-P-5000认沽：全部交易复盘](docs/trading-journal/2026-09-14-to-10-19-eg-futures-options-retrospective.md) — 含16组期货成交配对、4手认沽建仓与确认平仓、当时供需背景、期权机会成本与未执行反事实；未发布个人身份或账户资料。
+
 ## 🧭 研究、论文与工程 Idea Bank
 
 - [AI 辅助开发：避免过度工程化的第一性原理（2026-10-16）](docs/ai-assisted-development-principles-2026-10-16.md) — 可用于其他项目的开发节奏、测试尺度、Agent 分工和专业知识核实原则。
