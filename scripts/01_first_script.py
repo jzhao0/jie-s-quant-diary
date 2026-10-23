@@ -15,6 +15,9 @@ print(df.head())
 
 print(f"\n数据形状: {df.shape}")
 
-output_path = "data/maotai_2024.csv"
+from pathlib import Path
+
+output_path = Path(__file__).resolve().parents[1] / "data" / "maotai_2024.csv"
+output_path.parent.mkdir(parents=True, exist_ok=True)
 df.to_csv(output_path, index=False, encoding="utf-8-sig")
 print(f"\n数据已保存到: {output_path}")
