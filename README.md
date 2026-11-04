@@ -71,3 +71,8 @@ jupyter lab
 - [AKShare 文档](https://www.akshare.xyz/)
 - [Tushare 接口](https://tushare.pro/)
 - [Pandas 金融分析](https://pandas.pydata.org/)
+
+## 📖 宏观金融、经济与风险管理公开研究归档
+
+- [2026-11-04｜全球金融危机、中国结构调整、养老金与代际就业：宏观—微观研究档案](docs/macro-systemic-risk-policy-demography-youth-2026-11-04.md) — 含「金融风险管理期末论述题素材入口」（第0节，仅素材与来源，**不是答案**），及十五五政策、统计口径核查和职业技能分析；已脱敏，供其他课程AI按需引用。
+- [2026-10-06｜金融危机与宏观冲击的历史案例及机制](docs/financial-crisis-macro-history-framework-2026-10-06.md) — 2008、亚洲金融危机、历史股灾和流动性传染机制。
